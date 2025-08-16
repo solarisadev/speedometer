@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMG A45 Acceleration Simulator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #1a1a1a;
+      font-family: 'Arial', sans-serif;
+    }
+    #dashboard {
+      background: linear-gradient(180deg, #2c2c2c, #1a1a1a);
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+      text-align: center;
+    }
+    #speedDisplay {
+      font-size: 48px;
+      font-weight: bold;
+      color: #ff4d4d;
+      text-shadow: 0 0 5px rgba(255, 77, 77, 0.7);
+      margin-bottom: 10px;
+    }
+    #unit {
+      font-size: 24px;
+      color: #ccc;
+    }
+    #gearDisplay {
+      font-size: 24px;
+      color: #ff4d4d;
+      margin-top: 10px;
+    }
+    canvas {
+      border: 2px solid #333;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="dashboard">
+    <div id="speedDisplay">0</div>
+    <div id="unit">km/h</div>
+    <div id="gearDisplay">Gear: N</div>
+  </div>
+  <script>
+    // AMG A45 S physics parameters
+    let speed = 0; // Current speed in km/h
+    const maxPower = 376; // Horsepower
+    const mass = 1550; // kg
+    const dragCoefficient = 0.36; // Approximate for AMG A45
+    const frontalArea = 2.2; // m^2
+    const airDensity = 1.225; // kg/m^3
+    const rollingResistance = 0.015; // Coefficient
+    const maxSpeed = 250; // km/h
+    const gearRatios = [3.88, 2.43, 1.81, 1.43, 1.16, 0.95, 0.78]; // 7-speed DCT
+    const finalDrive = 3.23;
+    const tireRadius = 0.33; // m
+    const shiftTime = 0.2; // seconds
+    let currentGear = 0; // Neutral
+    let timeSinceShift = 0;
+    let isShifting = false;
+
+    // Conversion constants
+    const hpToWatts = 745.7;
+    const g = 9.81; // m/s^2
+
+    function setup() {
+      createCanvas(400, 200);
+      textAlign(CENTER, CENTER);
+      textSize(20);
+      frameRate(60);
+    }
+
+    function draw() {
+      background(50);
+      
+      // Calculate physics
+      let deltaTime = 1 / 60; // seconds
+      if (!isShifting && speed < maxSpeed) {
+        // Engine force
+        let enginePower = maxPower * hpToWatts; // Convert to watts
+        let rpm = (speed * 1000 / 3600) / (tireRadius * 2 * PI) * gearRatios[currentGear] * finalDrive * 60;
+        let torque = enginePower / (rpm * 2 * PI / 60); // Nm
+        let force = (torque * gearRatios[currentGear] * finalDrive) / tireRadius; // N
+
+        // Drag and rolling resistance
+        let speedMs = speed * 1000 / 3600; // Convert to m/s
+        let dragForce = 0.5 * airDensity * dragCoefficient * frontalArea * speedMs * speedMs;
+        let rollingForce = mass * g * rollingResistance;
+        let totalForce = force - dragForce - rollingForce;
+
+        // Acceleration and speed update
+        let acceleration = totalForce / mass; // m/s^2
+        speedMs += acceleration * deltaTime;
+        speed = speedMs * 3600 / 1000; // Convert back to km/h
+
+        // Gear shifting logic
+        if (rpm > 6500 && currentGear < gearRatios.length - 1) {
+          isShifting = true;
+          timeSinceShift = 0;
+          currentGear++;
+        }
+      }
+
+      // Handle gear shift delay
+      if (isShifting) {
+        timeSinceShift += deltaTime;
+        if (timeSinceShift >= shiftTime) {
+          isShifting = false;
+        }
+      }
+
+      // Ensure speed doesn't exceed max
+      if (speed > maxSpeed) speed = maxSpeed;
+      if (speed < 0) speed = 0;
+
+      // Update displays
+      document.getElementById('speedDisplay').innerText = Math.floor(speed);
+      document.getElementById('gearDisplay').innerText = `Gear: ${currentGear === 0 ? 'N' : currentGear}`;
+
+      // Draw tachometer-like gauge
+      translate(width / 2, height / 2);
+      noFill();
+      stroke(255);
+      strokeWeight(10);
+      arc(0, 0, 150, 150, -HALF_PI, HALF_PI);
+      stroke(255, 0, 0);
+      strokeWeight(8);
+      let angle = map(speed, 0, maxSpeed, -HALF_PI, HALF_PI);
+      line(0, 0, 60 * cos(angle), 60 * sin(angle));
+
+      // Draw speed labels
+      noStroke();
+      fill(255);
+      textSize(14);
+      for (let i = 0; i <= maxSpeed; i += 50) {
+        let labelAngle = map(i, 0, maxSpeed, -HALF_PI, HALF_PI);
+        let x = 80 * cos(labelAngle);
+        let y = 80 * sin(labelAngle);
+        text(i, x, y);
+      }
+    }
+  </script>
+</body>
+</html>
